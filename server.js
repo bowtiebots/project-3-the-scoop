@@ -1,3 +1,6 @@
+//var yaml = require('yaml-js');
+//var fs = require('fs');
+
 // database is let instead of const to allow us to modify it in test.js
 let database = {
   users: {},
@@ -44,26 +47,44 @@ const routes = {
   }
 };
 
+/*
+//YAML saving and loading
+function loadDatabase (){
+  fs.readFile('database.yaml',yaml.load(database), err => {
+    if (err) console.log(err);
+  })
+}
+
+function saveDatabase (){
+  fs.writeFile('database.yaml',yaml.dump(database), err => {
+    if (err) console.log(err);
+  })
+}
+*/
+
+
 //pretty print function...
-const pp = x => JSON.stringify(x,null,2);
+//const pp = x => JSON.stringify(x,null,2);
+
+//Comment functions
 
 function createNewComment(url, request) {
 /*console.log(`>> CREATE NEW COMMENT >>`);
   console.log(`>>>>>> URL is [${url}]`);
   console.log(`>>>>>> request.body is ${pp(request.body)}`); */
   const response = {};
-  const requestComment = request.body && request.body.username
-                         && request.body.articleId && request.body.comment;
+  const requestComment = request.body && request.body.comment;
+  const rcUsername = requestComment && requestComment.username;
+  const rcArticleId = requestComment && requestComment.articleId;
+  const rcBody = requestComment && requestComment.body;
 
-  console.log(requestComment);
-  // Response: { body: 'Comment Body', username: 'existing_user', articleId: 1 }
-
-  if (requestComment) {
+  if (requestComment && database.users[rcUsername]
+    && database.articles[rcArticleId] && rcBody) {
     const comment = {
       id: database.nextCommentId,
-      body: reqestComment.body,
-      username: requestComment.username,
-      articleId: requestComment.articleId,
+      body: rcBody,
+      username: rcUsername,
+      articleId: rcArticleId,
       upvotedBy: [],
       downvotedBy: []
     };
@@ -84,68 +105,87 @@ function createNewComment(url, request) {
 function updateComment (url,request) {
 /*console.log(`>> UPDATE COMMENT >>`);
   console.log(`>>>>>> URL is [${url}]`);
-  console.log(`>>>>>> request.body is ${pp(request.body)}`) */
-
+  console.log(`>>>>>> request.body is ${pp(request.body)}`)*/
   const response = {};
   const id = Number(url.split('/').filter(segment => segment)[1]);
   const savedComment = database.comments[id];
   const newComment = request.body && request.body.comment;
+//console.log(`newComment is: ${pp(newComment)}`);
+//console.log(`savedComment is: ${pp(savedComment)}`);
 
-  if (!savedComment){
-    response.status = 404;
-  } else if (!newComment){
-    response.status = 400;
+
+  if (!request.body || !newComment || !savedComment){
+    !savedComment ? response.status = 404 : response.status = 400;
   } else {
+    savedComment.body = newComment.body || savedComment.body;
 
     response.status = 200;
   }
+  return response;
 }
 
 function deleteComment (url,request) {
 /*console.log(`>> DELETE COMMENT >>`);
-  console.log(`>>>>>> URL is [${url}]`);
-  console.log(`>>>>>> request.body is ${pp(request.body)}`)*/
+  console.log(`>>>>>> URL is [${url}]`);*/
+  const response = {};
   const id = Number(url.split('/').filter(segment => segment)[1]);
-  const comment = database.comments[id];
+  const savedComment = database.comments[id] ? database.comments[id] : false;
+  const username = savedComment.username;
+  const articleId = savedComment.articleId;
 
-  if (comment){
-    delete database.comment[id];
-    const userCommentIds = database.users[comment.username].commentIds;
+  if (savedComment){
+    database.comments[id] = null;
+    const userCommentIds = database.users[username].commentIds;
     userCommentIds.splice(userCommentIds.indexOf(id), 1);
-    const articleCommentIds = database.articles[comment.articleId].articleIds;
+    const articleCommentIds = database.articles[articleId].commentIds;
     articleCommentIds.splice(articleCommentIds.indexOf(id), 1);
 
     response.status = 204;
   } else {response.status = 404;}
+
+  return response;
 }
 
 function upvoteComment (url,request) {
-  const respones = {};
+  /*console.log(`>> DOWNVOTE COMMENT >>`);
+    console.log(`>>>>>> URL is [${url}]`);
+    console.log(`>>>>>> request.body is ${pp(request.body)}`);*/
+  const response = {};
   const username = request.body && request.body.username;
   const id = Number(url.split('/').filter(segment => segment)[1]);
+  const commentExists = database.users[username] ?
+                          database.comments[id] ? true
+                          : false
+                        : false;
 
-  if (username){
+  if (username && commentExists){
+    let upvoteComment = database.comments[id];
+    upvoteComment = upvote(upvoteComment, username);
 
-    resonse.body = {};
+    response.body = {comment: upvoteComment};
     response.status = 200;
   } else {response.status = 400;}
+
+  return response;
 }
 
 function downvoteComment (url,request) {
 /*console.log(`>> DOWNVOTE COMMENT >>`);
   console.log(`>>>>>> URL is [${url}]`);
-  console.log(`>>>>>> request.body is ${pp(request.body)}`);
-  >>>>>> URL is [/comments/1/downvote]
->>>>>> request.body is {
-  "username": "other_user" */
-  const respones = {};
+  console.log(`>>>>>> request.body is ${pp(request.body)}`);*/
+  const response = {};
   const username = request.body && request.body.username;
   const id = Number(url.split('/').filter(segment => segment)[1]);
+  const commentExists = database.users[username] ?
+                          database.comments[id] ? true
+                          : false
+                        : false;
 
-  if (username && database.comment[id]){
+  if (username && commentExists){
+    let downvoteComment = database.comments[id];
+    downvoteComment = downvote(downvoteComment, username);
 
-
-    response.body = {comment: {}};
+    response.body = {comment: downvoteComment};
     response.status = 200;
   } else {response.status = 400;}
 
